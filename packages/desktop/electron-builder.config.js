@@ -642,6 +642,13 @@ export default {
       filter: ["**/*", "!**/*.map"],
     },
     {
+      // 根因：electron-builder 的 FileMatcher 会硬排除源目录下名为 node_modules 的子目录，
+      // 即使 glm 匹配器使用 **/* 也不会复制 PDF.js/Canvas。以该目录为独立源根后才能随 Agent 入包。
+      from: `bundled-agents/${targetPlatform.key}/glm/node_modules`,
+      to: "glm/node_modules",
+      filter: ["**/*", "!**/*.map"],
+    },
+    {
       // agent shell 之前完全依赖宿主系统 PATH，GUI 启动时经常拿不到用户自己装的 rg。
       // 这里把 ripgrep 作为桌面端内置 runtime tool 打进 resources/tools，
       // 后续 host/server 把该目录追加到 PATH；用户版本优先，缺失时再由随包 rg 兜底。
