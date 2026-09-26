@@ -26,6 +26,9 @@ after media budget selection, including PDF blocks from composer attachments and
 tool results. Persistent chat history, attachments, and replay retain their original
 PDF blocks. The existing `PdfDocumentPort` owns page counting and rendering; its
 desktop adapter uses packaged PDF.js rendering so no external Poppler install is needed.
+Bootstrap selects that adapter from the Electron runtime identity, which survives CLI
+environment sanitization; a host-injected PDF port always takes precedence. Standalone
+Node CLI continues to use Poppler.
 Native-PDF providers keep their current wire representation.
 
 ```mermaid

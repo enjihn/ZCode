@@ -12,10 +12,6 @@ import {
 import { createNodeFileSystemAdapter } from "@zcode/adapters/fs";
 import { createNodeWebFetchHttpClientAdapter } from "@zcode/adapters/http";
 import { createJimpImageProcessorAdapter } from "@zcode/adapters/image";
-import {
-  createPdfJsPdfDocumentAdapter,
-  createPopplerPdfDocumentAdapter,
-} from "@zcode/adapters/pdf";
 import { createNodeSessionMailboxAdapter } from "@zcode/adapters/mailbox";
 import { createNodeContextSourceAdapter } from "@zcode/adapters/context";
 import { createNodeSkillAdapter } from "@zcode/adapters/skills";
@@ -84,6 +80,7 @@ import {
 import { getWorkflowConcurrencyGovernor } from "./workflow-concurrency-governor.js";
 import { createDynamicWorkflowSnippetService } from "./dynamic-workflow-snippet-service.js";
 import { createModelCatalogPort } from "./model-catalog-port.js";
+import { resolvePdfDocumentPort } from "./pdf-document-port.js";
 import { createDynamicWorkflowRunProgressSink } from "./dynamic-workflow-run-progress-sink.js";
 import { createScriptWorkflowAgentRuntime } from "./script-workflow-child-runtime.js";
 import { workflowActorModelPolicy } from "./workflow-actor-model.js";
@@ -405,12 +402,10 @@ export async function createZCodeApp(options: ZCodeAppOptions): Promise<ZCodeApp
         processEnv: options.env ?? process.env,
       });
     const ownsExecutionPort = options.executionPort === undefined;
-    const pdfDocumentPort =
-      options.pdfDocumentPort ??
-      // Desktop Agent 以 ELECTRON_RUN_AS_NODE 运行并带有 PDF.js/Canvas；纯 CLI 继续使用 Poppler。
-      ((options.env ?? process.env).ELECTRON_RUN_AS_NODE === "1"
-        ? createPdfJsPdfDocumentAdapter()
-        : createPopplerPdfDocumentAdapter({ executionPort }));
+    const pdfDocumentPort = resolvePdfDocumentPort({
+      executionPort,
+      explicitPort: options.pdfDocumentPort,
+    });
     // browser-use 控制端口：仅当宿主（desktop）注入时可用，无本地 fallback（纯 CLI 无浏览器底座）。
     const fileSystemPort = options.fileSystemPort ?? createNodeFileSystemAdapter();
     const httpClientPort =
