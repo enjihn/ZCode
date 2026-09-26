@@ -61,7 +61,9 @@ export async function steerTurn(
   const request = typeof input === "string" ? { input } : input;
   const activeTurn = this.activeTurn;
   const reservedTurn =
-    activeTurn === undefined && this.activeTurnStartReservation?.kind === "regular"
+    activeTurn === undefined &&
+    this.activeTurnStartReservation?.kind === "regular" &&
+    this.activeTurnStartReservation.acceptingGuide
       ? this.activeTurnStartReservation
       : undefined;
   const targetTurn = activeTurn ?? reservedTurn;
@@ -181,7 +183,8 @@ export async function steerTurn(
     this.activeTurn?.turnId === targetTurn.turnId && this.activeTurn.steerable
       ? this.activeTurn
       : this.activeTurnStartReservation?.turnId === targetTurn.turnId &&
-          this.activeTurnStartReservation.kind === "regular"
+          this.activeTurnStartReservation.kind === "regular" &&
+          this.activeTurnStartReservation.acceptingGuide
         ? this.activeTurnStartReservation
         : undefined;
   if (!currentTarget) {
@@ -371,6 +374,7 @@ export function reserveTurnStart(
   this.activeTurnStartReservation = {
     kind,
     pendingInputs: [],
+    acceptingGuide: true,
     traceContext,
     turnId,
   };
@@ -379,6 +383,7 @@ export function reserveTurnStart(
 export async function releaseTurnStart(this: AgentRuntimeInternal, turnId: TurnId): Promise<void> {
   const reservation = this.activeTurnStartReservation;
   if (reservation?.turnId !== turnId) return;
+  reservation.acceptingGuide = false;
   await fallbackGuideInputsToQueue(
     this,
     reservation,

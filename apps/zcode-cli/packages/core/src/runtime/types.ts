@@ -784,6 +784,8 @@ export interface ActiveTurnStartReservation {
   kind: ActiveTurnKind;
   /** Guide inputs admitted while the start command is preparing the active turn. */
   pendingInputs: PendingTurnInput[];
+  /** Closed synchronously before a failed start falls back its accepted Guide inputs. */
+  acceptingGuide: boolean;
   traceContext: TraceContext;
   turnId: TurnId;
 }

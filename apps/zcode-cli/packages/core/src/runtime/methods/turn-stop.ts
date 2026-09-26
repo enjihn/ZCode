@@ -177,13 +177,13 @@ export async function finishModelStepWithoutToolCalls(
     // 上限命中后只允许这一轮纯文本说明。跳过 guide 和 Stop hook，避免它们再次
     // 触发模型请求，把已经关闭工具的 turn 延长成新的恢复循环。
     if (state.activeTurn) {
+      state.activeTurn.steerable = false;
       await this.fallbackPendingGuidesToQueue({
         activeTurn: state.activeTurn,
         events: state.events,
         reasonCode: "guide.noToolBoundary",
         traceContext: state.turnTraceContext,
       });
-      state.activeTurn.steerable = false;
     }
     state.stableProductStartMessageId = state.currentUserMessageId;
     state.stableBoundaryAssistantMessageId = options.assistantMessageId;
@@ -218,6 +218,7 @@ export async function finishModelStepWithoutToolCalls(
   if (state.activeTurn) {
     // FIFO barrier / reservation 阻止本轮安全 inline 时，仍保留既有权威 queue 兜底；
     // 正常可消费的 text-only guide 已在上方作为 user-role continuation drain。
+    state.activeTurn.steerable = false;
     await this.fallbackPendingGuidesToQueue({
       activeTurn: state.activeTurn,
       events: state.events,
@@ -225,7 +226,6 @@ export async function finishModelStepWithoutToolCalls(
       traceContext: state.turnTraceContext,
     });
   }
-  if (state.activeTurn) state.activeTurn.steerable = false;
   // assistant completed 只代表 model step 收口；Stop hook 仍可能继续同一 product turn。
   // 只有最终 break 才把它交给 turn.ts 在 goal accounting 后持久化最终 boundary。
   state.stableProductStartMessageId = state.currentUserMessageId;

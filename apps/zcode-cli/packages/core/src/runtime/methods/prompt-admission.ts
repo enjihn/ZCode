@@ -46,7 +46,9 @@ export async function admitPrompt(
     const canSteer =
       attachments === undefined &&
       (activeTurn?.steerable === true ||
-        (activeTurn === undefined && reservation?.kind === "regular")) &&
+        (activeTurn === undefined &&
+          reservation?.kind === "regular" &&
+          reservation.acceptingGuide)) &&
       (options?.queueDelivery === "guide" ||
         options?.delivery === "auto" ||
         options?.delivery === "steer_active_turn") &&
@@ -75,7 +77,9 @@ export async function admitPrompt(
           ? "guide.attachmentsUnsupported"
           : activeTurn?.steerable === false
             ? "guide.turnNotSteerable"
-            : "guide.maintenance"
+            : reservation?.acceptingGuide === false
+              ? "guide.startFailed"
+              : "guide.maintenance"
         : undefined;
     return await this.enqueueDeferredInput({
       attachments,
@@ -103,6 +107,7 @@ export async function admitPrompt(
   const reservation: ActiveTurnStartReservation = {
     kind: "regular",
     pendingInputs: [],
+    acceptingGuide: true,
     traceContext: turnTraceContext,
     turnId,
   };

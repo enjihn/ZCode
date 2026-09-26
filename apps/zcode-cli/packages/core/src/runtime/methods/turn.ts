@@ -715,6 +715,7 @@ export async function executeTurnCommand(
       } catch (error) {
         turnFailureHandled = true;
         const coreError = createTurnFailureError(error, turnAbortSignal, "Turn execution failed");
+        if (activeTurn) activeTurn.steerable = false;
         const preserveQueueAutoDrainOnCancel =
           coreError.type === CoreErrorType.TurnCancelled &&
           this.activeForegroundExecution?.preserveQueueAutoDrainOnCancel === true;

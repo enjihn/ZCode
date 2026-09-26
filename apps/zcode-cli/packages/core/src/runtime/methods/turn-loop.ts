@@ -108,40 +108,17 @@ export async function runRegularTurnLoop(
     finishMcp();
     throwIfTurnAborted(state.turnAbortSignal);
     // A Guide admitted against the start reservation belongs in the first provider request.
-    // This is the last preparation boundary before tool selection and request projection.
+    // Drain it after MCP initialization; the final check below covers later awaited preparation.
     if (state.modelStepCount === 0 && (await drainInlineGuideForNextRequest(this, state))) {
       drainedSteerForNextRequest = state.drainedSteerForNextRequest;
       state.drainedSteerForNextRequest = undefined;
     }
     const finishTools = beginLocalTurnPreparation(state.turnTraceContext, "tools");
-    const turnDisallowedTools = buildTurnDisallowedTools(state);
     // automation 派发到已 active 会话或重试恢复时，入口 metadata 可能没有带到
     // loop state；但 queryId 仍是 automation-*。provider 请求边界必须按 queryId 再硬过滤
     // automation 写工具，否则模型会先看到并创建、修改或删除任务定义。
-    const tools = state.automationCreateLimitReached
-      ? []
-      : turnDisallowedTools
-        ? this.getTools(state.model).filter((tool) => !turnDisallowedTools.has(tool.name))
-        : this.getTools(state.model);
+    let tools = selectTurnTools(this, state);
     finishTools();
-    if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
-      this.needsPlanModeExitReminder = false;
-      commitTurnRequestEntries(this, state.turnRequestState, [
-        systemReminderAttachmentEntry("plan_mode_exit", buildPlanModeExitReminderBody()),
-      ]);
-    }
-    const runtimeModeReminderBody = outputTokenRecoveryActive
-      ? null
-      : buildRuntimeModeReminderBody(
-          state.turnRequestState.entries,
-          this.getMode(),
-          this.getPlanEnabled(),
-        );
-    if (runtimeModeReminderBody) {
-      commitTurnRequestEntries(this, state.turnRequestState, [
-        systemReminderAttachmentEntry("runtime_mode", runtimeModeReminderBody),
-      ]);
-    }
     if (
       !outputTokenRecoveryActive &&
       tools.some((tool) => tool.name === "TodoWrite") &&
@@ -160,6 +137,35 @@ export async function runRegularTurnLoop(
         text: reminderBody,
         traceContext: state.turnTraceContext,
       });
+    }
+    // Todo preparation can await disk persistence after the earlier Guide check. Close that
+    // gap immediately before snapshotting the provider request, including later model steps.
+    let lateGuideDrained = false;
+    while (await drainInlineGuideForNextRequest(this, state)) {
+      lateGuideDrained = true;
+      drainedSteerForNextRequest = state.drainedSteerForNextRequest;
+      state.drainedSteerForNextRequest = undefined;
+    }
+    if (lateGuideDrained) {
+      tools = selectTurnTools(this, state);
+    }
+    if (!outputTokenRecoveryActive && this.needsPlanModeExitReminder) {
+      this.needsPlanModeExitReminder = false;
+      commitTurnRequestEntries(this, state.turnRequestState, [
+        systemReminderAttachmentEntry("plan_mode_exit", buildPlanModeExitReminderBody()),
+      ]);
+    }
+    const runtimeModeReminderBody = outputTokenRecoveryActive
+      ? null
+      : buildRuntimeModeReminderBody(
+          state.turnRequestState.entries,
+          this.getMode(),
+          this.getPlanEnabled(),
+        );
+    if (runtimeModeReminderBody) {
+      commitTurnRequestEntries(this, state.turnRequestState, [
+        systemReminderAttachmentEntry("runtime_mode", runtimeModeReminderBody),
+      ]);
     }
     const outputStyleReminderBody =
       state.modelStepCount === 0
@@ -223,6 +229,15 @@ export async function runRegularTurnLoop(
       break;
     }
   }
+}
+
+function selectTurnTools(runtime: AgentRuntimeInternal, state: RegularTurnLoopState) {
+  const disallowedTools = buildTurnDisallowedTools(state);
+  return state.automationCreateLimitReached
+    ? []
+    : disallowedTools
+      ? runtime.getTools(state.model).filter((tool) => !disallowedTools.has(tool.name))
+      : runtime.getTools(state.model);
 }
 
 function buildTurnDisallowedTools(state: RegularTurnLoopState): Set<string> | null {

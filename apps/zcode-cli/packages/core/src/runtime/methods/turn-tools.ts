@@ -440,6 +440,7 @@ export async function executeToolCallsForModelStep(
       return "continue";
     }
     if (state.activeTurn) {
+      state.activeTurn.steerable = false;
       await this.fallbackPendingGuidesToQueue({
         activeTurn: state.activeTurn,
         events: state.events,
@@ -455,7 +456,6 @@ export async function executeToolCallsForModelStep(
       toolCallId: stopTurnResult.toolCallId,
       toolName: stopTurnResult.toolName,
     });
-    if (state.activeTurn) state.activeTurn.steerable = false;
     state.turnMachine = new TurnMachineImpl(
       state.turnMachine.complete(state.modelResponse, "success"),
     );

@@ -129,6 +129,104 @@ test("a failed start reservation changes its accepted Guide to a visible queue i
   );
 });
 
+test("a Guide admitted while start fallback is persisting also becomes a visible queue item", async () => {
+  const events: Array<{ type: string; payload: unknown; sequenceNumber: number }> = [];
+  let enterFallback!: () => void;
+  const fallbackStarted = new Promise<void>((resolve) => {
+    enterFallback = resolve;
+  });
+  let finishFallback!: () => void;
+  const fallbackWrite = new Promise<void>((resolve) => {
+    finishFallback = resolve;
+  });
+  const runtime = new AgentRuntime("session-overlapping-start" as never, { agentName: "ZCode" }, {
+    eventStore: {
+      append: async (event: (typeof events)[number]) => {
+        const payload = event.payload as { pendingInputId?: string };
+        if (
+          event.type === "turn_steer_delivery_changed" &&
+          payload.pendingInputId === "queue-first"
+        ) {
+          enterFallback();
+          await fallbackWrite;
+        }
+        const stored = { ...event, sequenceNumber: events.length + 1 };
+        events.push(stored);
+        return stored;
+      },
+      getEvents: async () => events,
+    },
+    sessionStore: { saveSessionInput: async () => undefined },
+  } as never);
+  const turnId = "turn-overlapping-start";
+  const traceContext = {
+    ...(runtime as unknown as { rootTraceContext: Record<string, unknown> }).rootTraceContext,
+    turnId,
+  };
+  runtime.reserveTurnStart(turnId as never, traceContext as never, "regular");
+  const intent = (queueItemId: string, text: string, admissionSeq: number) => ({
+    admittedAt: Date.now(),
+    admissionSeq,
+    clientId: "desktop-client",
+    kind: "sendText" as const,
+    queueItemId,
+    requestedDelivery: "guide" as const,
+    sourceCommandId: queueItemId,
+    text,
+  });
+  const first = await runtime.admitPrompt("First Guide", undefined, {
+    delivery: "start_turn",
+    queueDelivery: "guide",
+    inputId: "queue-first",
+    intent: intent("queue-first", "First Guide", 1),
+  });
+  assert.equal(first.kind, "queued");
+  assert.equal(first.delivery, "guide");
+
+  const release = runtime.releaseTurnStart(turnId as never);
+  try {
+    await fallbackStarted;
+    const second = await runtime.admitPrompt("Second Guide", undefined, {
+      delivery: "start_turn",
+      queueDelivery: "guide",
+      inputId: "queue-second",
+      intent: intent("queue-second", "Second Guide", 2),
+    });
+    assert.equal(second.kind, "queued");
+    assert.equal(second.delivery, "queue");
+  } finally {
+    finishFallback();
+  }
+  await release;
+
+  const changes = events
+    .filter((event) => event.type === "turn_steer_delivery_changed")
+    .map((event) => event.payload as { admittedDelivery: string; pendingInputId: string });
+  assert.deepEqual(
+    changes.map((change) => [change.pendingInputId, change.admittedDelivery]),
+    [["queue-first", "queue"]],
+  );
+  const projection = await runtime.rebuildProjection();
+  assert.deepEqual(
+    projection.pendingSteerInputs.map((item) => [
+      item.pendingInputId,
+      item.intent?.admittedDelivery,
+    ]),
+    [
+      ["queue-first", "queue"],
+      ["queue-second", "queue"],
+    ],
+  );
+  assert.deepEqual(
+    projection.pendingSteerInputs.map((item) => item.intent?.fallbackReasonCode),
+    ["guide.startFailed", "guide.startFailed"],
+  );
+  assert.equal(
+    (runtime as unknown as { activeTurnStartReservation?: unknown }).activeTurnStartReservation,
+    undefined,
+  );
+});
+
 test("removing an accepted reserved Guide prevents its later delivery", async () => {
   const events: Array<{ type: string; payload: unknown; sequenceNumber: number }> = [];
   const cancelledInputs: string[] = [];
