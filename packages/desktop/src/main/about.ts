@@ -62,6 +62,7 @@ const ABOUT_MESSAGES: Record<
   {
     aboutTitle: string;
     versionLabel: string;
+    commitLabel: string;
     okButtonLabel: string;
     optimizedForAppleSilicon: string;
     copyright: (year: number) => string;
@@ -70,6 +71,7 @@ const ABOUT_MESSAGES: Record<
   "zh-CN": {
     aboutTitle: "关于 ZCode",
     versionLabel: "版本",
+    commitLabel: "提交",
     okButtonLabel: "确定",
     optimizedForAppleSilicon: "已针对 Apple Silicon 优化。",
     copyright: (year) => `版权所有 © ${year} ZCode。`,
@@ -77,6 +79,7 @@ const ABOUT_MESSAGES: Record<
   "en-US": {
     aboutTitle: "About ZCode",
     versionLabel: "version",
+    commitLabel: "Commit",
     okButtonLabel: "OK",
     optimizedForAppleSilicon: "Optimized for Apple Silicon.",
     copyright: (year) => `Copyright © ${year} ZCode.`,
@@ -257,6 +260,8 @@ export async function showAboutDialog(
       createCustomAboutDialogHtml({
         applicationName: ABOUT_APPLICATION_NAME,
         appVersion: snapshot.appVersion,
+        buildCommitId: snapshot.buildCommitId,
+        commitLabel: aboutMessages.commitLabel,
         copyright: formatAboutCopyright(undefined, locale),
         optimizationLine: formatAboutOptimizationLine(snapshot, locale),
         versionLabel: aboutMessages.versionLabel,

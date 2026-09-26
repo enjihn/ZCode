@@ -1,6 +1,8 @@
 interface CustomAboutDialogHtmlInput {
   applicationName: string;
   appVersion: string;
+  buildCommitId: string;
+  commitLabel: string;
   copyright: string;
   optimizationLine: string;
   versionLabel: string;
@@ -115,6 +117,15 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
         letter-spacing: 0;
       }
 
+      .commit {
+        display: block;
+        margin-top: 5px;
+        font-size: 11px;
+        line-height: 1.2;
+        font-weight: 400;
+        color: #6e6e73;
+      }
+
       .meta {
         margin-top: 28px;
         display: flex;
@@ -163,6 +174,10 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
         .meta {
           color: #e2e2e2;
         }
+
+        .commit {
+          color: #a1a1a6;
+        }
       }
     </style>
   </head>
@@ -194,6 +209,7 @@ export function createCustomAboutDialogHtml(input: CustomAboutDialogHtmlInput): 
           <h1 id="about-title" class="title">
             ${escapeHtml(input.applicationName)}<br />
             ${escapeHtml(input.versionLabel)} ${escapeHtml(input.appVersion)}
+            <span class="commit">${escapeHtml(input.commitLabel)} ${escapeHtml(input.buildCommitId)}</span>
           </h1>
           <div class="meta">
             ${input.optimizationLine ? `<div>${escapeHtml(input.optimizationLine)}</div>` : ""}
