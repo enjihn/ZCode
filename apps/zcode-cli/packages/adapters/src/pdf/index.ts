@@ -14,6 +14,7 @@ import {
   type PdfDocumentRenderPagesRequest,
   type PdfDocumentRenderedPage,
 } from "@zcode/contracts";
+export { createPdfJsPdfDocumentAdapter } from "./pdfjs-adapter.js";
 
 export interface PopplerPdfDocumentAdapterOptions {
   executionPort: ExecutionPort;

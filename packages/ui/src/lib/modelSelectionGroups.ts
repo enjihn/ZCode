@@ -9,6 +9,7 @@ import type { ModelSelectionView } from "@zcode/services";
 import type { ModelSelectGroup } from "@/ModelConfigSelect.js";
 import { decodeCustomModelValue, encodeCustomModelValue } from "@/lib/zcodeCustomModelValue.js";
 import { shouldShowModelVisionBadge } from "@/lib/modelVisionBadge.js";
+import { modelIdDisplayLabel } from "@/lib/modelDisplayLabels.js";
 
 export interface ModelProviderGroupLabelOptions {
   apiKeyLabel?: string;
@@ -54,7 +55,7 @@ export function buildRegistryModelSelectGroups(
         items: provider.models.map(({ modelId, config }) => ({
           key: `registry-provider:${provider.providerId}:${modelId}`,
           value: encodeCustomModelValue(provider.providerId, modelId),
-          name: modelId,
+          name: modelIdDisplayLabel(modelId),
           ...(shouldShowModelVisionBadge(
             modelId,
             config.properties?.inputFormat?.supportsImage,
@@ -93,5 +94,6 @@ export function resolveModelDisplayName(
     if (matched) return matched.name;
   }
 
-  return decodeCustomModelValue(value)?.modelName ?? null;
+  const modelName = decodeCustomModelValue(value)?.modelName;
+  return modelName ? modelIdDisplayLabel(modelName) : null;
 }

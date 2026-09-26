@@ -21,6 +21,7 @@ import {
   resolveDesktopProductIdentity,
 } from "./scripts/desktop-product-identity.mjs";
 import { verifyStagedKoffi } from "./scripts/koffi-package-assets.mjs";
+import { signPackagedPdfCanvasBinary } from "./scripts/pdf-canvas-package-signing.mjs";
 const ELECTRON_BUILDER_ARCH = {
   1: "x64",
   3: "arm64",
@@ -562,6 +563,15 @@ export default {
     runTimedSync("afterPack:assertPackagedNodePtyPrebuild", () =>
       assertPackagedNodePtyPrebuild(context),
     );
+    if (context.electronPlatformName === "darwin") {
+      runTimedSync("afterPack:signPackagedPdfCanvasBinary", () =>
+        signPackagedPdfCanvasBinary({
+          resourcesDir: resolvePackagedResourcesDir(context),
+          platformKey: targetPlatform.key,
+          signingIdentity: rawMacSigningIdentity || "-",
+        }),
+      );
+    }
     if (actualWindowsTarget) {
       await runTimedAsync("afterPack:writeWindowsInstallManifest", () =>
         writeWindowsInstallManifest(context),

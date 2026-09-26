@@ -11,6 +11,7 @@ import { ProviderModelMetadataDialog } from "@/settings/model-provider-section/P
 import { formatModelContextWindowLabel } from "@/lib/tokenNumberFormat.js";
 import type { ModelConfigResolution, ProviderConfigObject } from "@zcode/provider";
 import { shouldShowModelVisionBadge } from "@/lib/modelVisionBadge.js";
+import { modelIdDisplayLabel } from "@/lib/modelDisplayLabels.js";
 import { useProviderDetailFeedback } from "@/settings/model-provider-section/ProviderDetailFeedback.js";
 
 export function ModelRowInput({
@@ -250,7 +251,7 @@ export function ModelRowInput({
             data-testid={inputTestId}
             className="min-w-0 truncate font-mono text-ui-base text-foreground"
           >
-            {model.modelId}
+            {modelIdDisplayLabel(model.modelId)}
           </span>
           <span
             className="inline-flex h-5 max-w-20 shrink-0 items-center truncate rounded-md border border-border bg-surface px-1.5 font-mono text-ui-sm text-foreground-subtle"

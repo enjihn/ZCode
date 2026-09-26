@@ -10,6 +10,8 @@ export const manualModelConfigSchema = completeModelConfigDataSchema
     properties: complete.properties
       .pick({
         contextWindow: true,
+        // 请求投影模式在 UI 中隐藏，但固定配置也必须能持久化这个系统叶子。
+        pdfInputMode: true,
         supportsJsonSchemaOutput: true,
         supportsNativeWebSearch: true,
         supportsMidConversationSystem: true,
@@ -35,8 +37,19 @@ export function extractManualModelConfig(input: unknown): ManualModelConfig {
 
 /** 保留独立 enabled 和系统叶子；恢复智能配置及规则合成都使用同一字段归属。 */
 export function clearManualModelConfig(input: z.infer<typeof modelConfigDataSchema>) {
+  const remaining = omitSchemaFields(
+    manualModelConfigSchema.omit({ enabled: true }),
+    input,
+  ) as z.infer<typeof modelConfigDataSchema>;
+  // 重置可编辑字段时仍保留未在表单中显示的 PDF 投影策略。
+  const pdfInputMode = input.properties?.pdfInputMode;
   return modelConfigDataSchema.parse(
-    omitSchemaFields(manualModelConfigSchema.omit({ enabled: true }), input),
+    pdfInputMode === undefined
+      ? remaining
+      : {
+          ...remaining,
+          properties: { ...remaining.properties, pdfInputMode },
+        },
   );
 }
 

@@ -171,6 +171,7 @@ export function resolveProviderModelDraftCommit({
     // 系统字段不由编辑草稿产生；手动保存统一按可编辑 schema 提取。
     requiresMfjsToolSchema: currentModel.config.properties?.requiresMfjsToolSchema,
     contextWindow,
+    pdfInputMode: currentModel.config.properties?.pdfInputMode,
     inputFormat: {
       ...currentModel.config.properties?.inputFormat,
       supportsImage: draft.inputFormatValue.supportsImage,
@@ -337,11 +338,19 @@ function materializeEditorManagedPersonalConfig({
 }): ModelConfigObject {
   // enabled 由模型列表行单独管理，不随“跟随推荐配置”模式物化或清除。
   // 只提取可编辑叶子；隐藏请求映射必须来自当前身份规则，不能由旧模型草稿冻结。
-  return extractManualModelConfig({
+  const editableConfig = extractManualModelConfig({
     ...preserveEnabledPersonalConfig(current),
     properties: effective.properties,
     optionSpecs: effective.optionSpecs,
   });
+  // 隐藏的请求投影模式不属于手动编辑叶子，固定配置时仍需保留现有个人规则。
+  const pdfInputMode = current.properties?.pdfInputMode;
+  return pdfInputMode === undefined
+    ? editableConfig
+    : {
+        ...editableConfig,
+        properties: { ...editableConfig.properties, pdfInputMode },
+      };
 }
 
 function resolvePersonalBoolean<K extends string>(

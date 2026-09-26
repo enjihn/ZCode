@@ -17,8 +17,8 @@ export function createDesktopNativePackagePrunePatterns(targetPlatformKey) {
   assertSupportedTargetPlatformKey(targetPlatformKey);
 
   return [
-    // PDF 预览已经由 Vite 打进 renderer，pdfjs-dist 的 Canvas optional dependency
-    // 只服务 Node 渲染；pnpm 跨平台安装的 8 套 Canvas native 不应带进桌面安装包。
+    // renderer 的 PDF 预览由 Vite 打包；Agent 的 Node PDF.js/Canvas 独立暂存在 resources/glm。
+    // pnpm 安装的多平台 Canvas native 不应再混入 app.asar。
     "!node_modules/@napi-rs/canvas/**",
     "!node_modules/@napi-rs/canvas-*/**",
     // Linux prebuild 会在 beforePack 复制进 node-pty；源平台包本身不属于桌面运行时。

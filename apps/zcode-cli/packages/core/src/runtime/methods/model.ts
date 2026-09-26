@@ -12,6 +12,7 @@ import {
   normalizeStreamError,
   normalizeModelToolCallsForRuntime,
   projectMessagesWithMediaAttachmentPaths,
+  projectMessagesForPdfInput,
   projectMessagesForInputFormat,
   projectMessagesForMediaBudget,
   readRawFinishReason,
@@ -66,10 +67,14 @@ export async function runModelTextRequest(
     event: "model.request.media_projection",
     message: "Model request media budget projection",
   });
+  const pdfMessages = await projectMessagesForPdfInput(mediaProjection.messages, {
+    mode: model.properties.pdfInputMode === "rendered-pages" ? "rendered-pages" : "native",
+    pdfDocumentPort: this.pdfDocumentPort,
+    signal: options.abortSignal,
+    trace: options.traceContext,
+  });
   const projectedOptions =
-    mediaProjection.messages === options.messages
-      ? options
-      : { ...options, messages: mediaProjection.messages };
+    pdfMessages === options.messages ? options : { ...options, messages: pdfMessages };
   logModelRequestMediaSummary(this.logger, projectedOptions.traceContext, {
     incomingMessages: options.messages,
     mediaProjection,

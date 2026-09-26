@@ -81,6 +81,7 @@ export function serializeRegistryModelConfig(
     properties: {
       requiresMfjsToolSchema: config.properties.requiresMfjsToolSchema,
       contextWindow: config.properties.contextWindow,
+      pdfInputMode: config.properties.pdfInputMode ?? "native",
       inputFormat: {
         supportsText: config.properties.inputFormat.supportsText,
         supportsImage: config.properties.inputFormat.supportsImage,

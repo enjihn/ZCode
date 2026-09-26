@@ -18,6 +18,7 @@ export * from "./streaming-tool-ledger.js";
 export * from "./media-budget.js";
 export * from "./media-capability.js";
 export * from "./media-attachment-path.js";
+export * from "./pdf-input-projection.js";
 export * from "./media-observability.js";
 export * from "./provider-request-messages.js";
 export * from "./model-tool-call-validation.js";

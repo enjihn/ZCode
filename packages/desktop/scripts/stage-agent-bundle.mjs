@@ -8,10 +8,19 @@
 // bundled-agents/，没有 cli/dist/。于是 dev 一直跑着上一次打包时留下的那份 ——
 // 实测陈旧 3 天，任何 agent CLI 侧改动在 dev 里静默不生效，排查时会把「改动没生效」
 // 误判成「代码没起作用」。两边共用这一份，dev 与打包不可能再各自漂移。
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import { copyFileSync, cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const AGENT_BUNDLE_SOURCE_RELATIVE = "apps/zcode-cli/packages/cli/dist/zcode.cjs";
+
+const CANVAS_PLATFORM_PACKAGE = {
+  "darwin-arm64": "@napi-rs/canvas-darwin-arm64",
+  "darwin-x64": "@napi-rs/canvas-darwin-x64",
+  "linux-arm64": "@napi-rs/canvas-linux-arm64-gnu",
+  "linux-x64": "@napi-rs/canvas-linux-x64-gnu",
+  "win32-arm64": "@napi-rs/canvas-win32-arm64-msvc",
+  "win32-x64": "@napi-rs/canvas-win32-x64-msvc",
+};
 
 export function resolveAgentBundlePaths({ repoRoot, platformKey }) {
   const glmDir = resolve(repoRoot, "packages", "desktop", "bundled-agents", platformKey, "glm");
@@ -39,6 +48,21 @@ export function stageAgentBundle({ repoRoot, platformKey, log = console.log }) {
   rmSync(glmDir, { recursive: true, force: true });
   mkdirSync(glmDir, { recursive: true });
   copyFileSync(cliBundlePath, stagedBundlePath);
+  const canvasPlatformPackage = CANVAS_PLATFORM_PACKAGE[platformKey];
+  if (!canvasPlatformPackage) {
+    throw new Error(`[stage:agent-bundle] unsupported Canvas platform: ${platformKey}`);
+  }
+  // 根因：Agent 在 resources/glm 独立运行，app.asar 中的 renderer 依赖无法从这里解析。
+  // PDF.js Node 渲染需要 Canvas native，只暂存当前目标平台，避免带入其他架构二进制。
+  for (const moduleName of ["pdfjs-dist", "@napi-rs/canvas", canvasPlatformPackage]) {
+    const source = resolve(repoRoot, "node_modules", moduleName);
+    const target = resolve(glmDir, "node_modules", moduleName);
+    if (!existsSync(source)) {
+      throw new Error(`[stage:agent-bundle] missing PDF renderer dependency: ${source}`);
+    }
+    mkdirSync(resolve(target, ".."), { recursive: true });
+    cpSync(source, target, { recursive: true, dereference: true });
+  }
   const meta = {
     runtime: "electron-node",
     entry: "zcode.cjs",

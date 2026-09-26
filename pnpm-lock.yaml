@@ -145,6 +145,9 @@ importers:
       '@modelcontextprotocol/client':
         specifier: 2.0.0
         version: 2.0.0
+      '@napi-rs/canvas':
+        specifier: 0.1.100
+        version: 0.1.100
       '@zcode/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -178,6 +181,9 @@ importers:
       koffi:
         specifier: 2.15.6
         version: 2.15.6
+      pdfjs-dist:
+        specifier: 5.4.296
+        version: 5.4.296
       playwright-core:
         specifier: 1.59.1
         version: 1.59.1

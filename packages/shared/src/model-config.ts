@@ -69,6 +69,8 @@ export const completeModelPropertiesDataSchema = z
   .object({
     requiresMfjsToolSchema: z.boolean(),
     contextWindow: z.number().int().positive(),
+    /** 缺省沿用原生 PDF 文件块；仅明确指定的模型在请求投影时渲染页图。 */
+    pdfInputMode: z.enum(["native", "rendered-pages"]).optional(),
     inputFormat: completeModelInputFormatDataSchema,
     outputFormat: completeModelOutputFormatDataSchema,
     supportsToolCall: z.boolean(),

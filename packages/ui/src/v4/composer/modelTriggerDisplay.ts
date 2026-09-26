@@ -4,6 +4,7 @@ import {
 } from "@zcode/shared";
 import type { IntlInstance } from "@/i18n/IntlProvider.js";
 import type { ModelSelectGroup } from "@/ModelConfigSelect.js";
+import { modelIdDisplayLabel } from "@/lib/modelDisplayLabels.js";
 
 interface V4ModelTriggerDisplay {
   fullLabel: string;
@@ -35,7 +36,7 @@ export function formatModelChangeLabel(
     default:
       return formatProviderModelLabel(providerId, providerName, modelName);
   }
-  return `${modelName}(${intl.formatMessage({ id: planLabelId })})`;
+  return `${modelIdDisplayLabel(modelName)}(${intl.formatMessage({ id: planLabelId })})`;
 }
 
 export function formatProviderModelLabel(
@@ -46,11 +47,12 @@ export function formatProviderModelLabel(
   // Z.ai / BigModel 的内置连接名属于产品固定入口，拼进模型文案会重复展示
   // “Coding Plan”等连接信息；切换提示额外通过 formatModelChangeLabel 标明套餐类型。
   if (providerId && resolveModelProviderFamilyIdByProviderId(providerId)) {
-    return modelName;
+    return modelIdDisplayLabel(modelName);
   }
 
   const normalizedProviderName = providerName?.trim();
-  return normalizedProviderName ? `${normalizedProviderName}/${modelName}` : modelName;
+  const displayName = modelIdDisplayLabel(modelName);
+  return normalizedProviderName ? `${normalizedProviderName}/${displayName}` : displayName;
 }
 
 export function resolveV4ModelTriggerLabel({

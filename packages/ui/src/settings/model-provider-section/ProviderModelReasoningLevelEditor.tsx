@@ -3,6 +3,7 @@ import { PlusIcon, XIcon } from "lucide-react";
 import { Button } from "@/components/ui/button.js";
 import { cn } from "@/components/lib/utils.js";
 import { TECHNICAL_INPUT_ATTRIBUTES } from "@/lib/technicalInputAttributes.js";
+import { reasoningEffortDisplayLabel } from "@/lib/modelDisplayLabels.js";
 import { modelEditorControlStyle } from "@/settings/model-provider-section/modelEditorControlStyle.js";
 
 export function ProviderModelReasoningLevelEditor({
@@ -135,7 +136,7 @@ export function ProviderModelReasoningLevelEditor({
               onClick={() => beginEdit(index)}
               onKeyDown={(event) => handleChipKeyDown(event, index)}
             >
-              {value}
+              {reasoningEffortDisplayLabel(value)}
             </Button>
           )}
           <Button
@@ -143,7 +144,7 @@ export function ProviderModelReasoningLevelEditor({
             variant="ghost"
             size="icon-sm"
             className="mr-0.5 size-6 shrink-0 opacity-0 transition-opacity group-hover:opacity-100 focus-visible:opacity-100 disabled:opacity-0"
-            aria-label={`${deleteLabel}: ${value}`}
+            aria-label={`${deleteLabel}: ${reasoningEffortDisplayLabel(value)}`}
             disabled={values.length <= 1}
             onClick={() => onChange(values.filter((_, valueIndex) => valueIndex !== index))}
           >
