@@ -1,9 +1,11 @@
 import {
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   ZCODE_VERSION,
+  ZCODE_PRODUCT_FLAVOR,
   buildZCodeEndpointUrls,
   getForceUpdateMinimalVersionFromConfig,
   resolveForceUpdateRequirement,
+  shouldUseOfficialDesktopUpdates,
   type ForceUpdateRequirement,
   type Locale,
 } from "@zcode/shared";
@@ -217,6 +219,10 @@ function formatForceUpdateDialogText(
 export async function maybeBlockStartupForForceUpdate(
   options: ForceUpdateGuardOptions,
 ): Promise<ForceUpdateGuardResult> {
+  if (!shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    return { blocked: false };
+  }
+
   const requirement = await resolveDesktopForceUpdateRequirement({
     ...options,
     endpointOrigin: options.endpointOrigin,

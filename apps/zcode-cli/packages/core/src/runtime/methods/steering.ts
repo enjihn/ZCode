@@ -60,6 +60,11 @@ export async function steerTurn(
 ): Promise<TurnSteerResult> {
   const request = typeof input === "string" ? { input } : input;
   const activeTurn = this.activeTurn;
+  const reservedTurn =
+    activeTurn === undefined && this.activeTurnStartReservation?.kind === "regular"
+      ? this.activeTurnStartReservation
+      : undefined;
+  const targetTurn = activeTurn ?? reservedTurn;
   const inputSize = measureUtf8Bytes(request.input);
   const inputPreview = previewInput(request.input);
 
@@ -84,7 +89,7 @@ export async function steerTurn(
     });
   }
 
-  if (!activeTurn) {
+  if (!targetTurn) {
     return await this.rejectTurnSteer("no_active_turn", {
       expectedTurnId: request.expectedTurnId,
       inputPreview,
@@ -93,7 +98,7 @@ export async function steerTurn(
     });
   }
 
-  if (request.expectedTurnId !== undefined && request.expectedTurnId !== activeTurn.turnId) {
+  if (request.expectedTurnId !== undefined && request.expectedTurnId !== targetTurn.turnId) {
     return await this.rejectTurnSteer("expected_turn_mismatch", {
       activeTurn,
       expectedTurnId: request.expectedTurnId,
@@ -103,7 +108,7 @@ export async function steerTurn(
     });
   }
 
-  if (!activeTurn.steerable) {
+  if (activeTurn && !activeTurn.steerable) {
     return await this.rejectTurnSteer("turn_not_steerable", {
       activeTurn,
       expectedTurnId: request.expectedTurnId,
@@ -118,7 +123,7 @@ export async function steerTurn(
   const source: TurnSteerSource | undefined = request.source;
   const delivery = request.delivery;
   const toolDisallowlist = request.toolDisallowlist;
-  const queuePosition = activeTurn.pendingInputs.length;
+  const queuePosition = targetTurn.pendingInputs.length;
   const intent = request.intent
     ? {
         ...request.intent,
@@ -130,10 +135,10 @@ export async function steerTurn(
     id:
       request.pendingInputId ??
       request.intent?.queueItemId ??
-      this.createPendingInputId(activeTurn.turnId),
+      this.createPendingInputId(targetTurn.turnId),
     input: request.input,
     queuedAt: new Date(),
-    traceId: activeTurn.traceContext.traceId,
+    traceId: targetTurn.traceContext.traceId,
     queryId,
     ...(commandKind ? { commandKind } : {}),
     ...(source ? { source } : {}),
@@ -142,10 +147,9 @@ export async function steerTurn(
     ...(intent ? { intent } : {}),
     ...(request.attachments ? { attachments: request.attachments } : {}),
     ...(toolDisallowlist ? { toolDisallowlist } : {}),
-    turnId: activeTurn.turnId,
+    turnId: targetTurn.turnId,
   };
-  activeTurn.pendingInputs.push(pendingInput);
-  const queueLength = activeTurn.pendingInputs.length;
+  const queueLength = targetTurn.pendingInputs.length + 1;
   const event = createSessionEvent(
     SessionEventType.TurnSteerQueued,
     this.sessionId,
@@ -162,19 +166,46 @@ export async function steerTurn(
       ...(delivery ? { delivery } : {}),
       ...(intent ? { intent } : {}),
       ...(toolDisallowlist ? { toolDisallowlist } : {}),
-      targetTurnId: activeTurn.turnId,
+      targetTurnId: targetTurn.turnId,
       queueLength,
     },
     {
-      traceId: activeTurn.traceContext.traceId,
-      turnId: activeTurn.turnId,
+      traceId: targetTurn.traceContext.traceId,
+      turnId: targetTurn.turnId,
     },
   );
-  await this.appendEvent(event, activeTurn.traceContext);
+  await this.appendEvent(event, targetTurn.traceContext);
+  // Persist before exposing the input to the drainer. The reservation can turn active or
+  // finish while the append is in flight, so recheck the owning turn after persistence.
+  const currentTarget =
+    this.activeTurn?.turnId === targetTurn.turnId && this.activeTurn.steerable
+      ? this.activeTurn
+      : this.activeTurnStartReservation?.turnId === targetTurn.turnId &&
+          this.activeTurnStartReservation.kind === "regular"
+        ? this.activeTurnStartReservation
+        : undefined;
+  if (!currentTarget) {
+    if (delivery === "guide") {
+      await fallbackGuideInputsToQueue(
+        this,
+        { pendingInputs: [pendingInput], turnId: targetTurn.turnId },
+        "guide.turnInterrupted",
+        targetTurn.traceContext,
+      );
+    }
+    return {
+      kind: "queued",
+      delivery: "queue",
+      pendingInputId: pendingInput.id,
+      queueLength,
+      turnId: targetTurn.turnId,
+    };
+  }
+  currentTarget.pendingInputs.push(pendingInput);
   this.logger?.debug("Turn steer queued", {
-    ...traceContextToLogContext(activeTurn.traceContext),
-    activeTurnKind: activeTurn.kind,
-    activeTurnSteerable: activeTurn.steerable,
+    ...traceContextToLogContext(targetTurn.traceContext),
+    activeTurnKind: targetTurn.kind,
+    activeTurnSteerable: activeTurn?.steerable ?? true,
     inputId: request.inputId,
     queryId,
     event: "turn.steer.queued",
@@ -187,14 +218,15 @@ export async function steerTurn(
     ...(source ? { source } : {}),
     ...(request.inputPresentation ? { inputPresentation: request.inputPresentation } : {}),
     status: "waiting",
-    targetTurnId: activeTurn.turnId,
+    targetTurnId: targetTurn.turnId,
   });
 
   return {
     kind: "queued",
+    delivery: delivery === "guide" ? "guide" : "queue",
     pendingInputId: pendingInput.id,
     queueLength,
-    turnId: activeTurn.turnId,
+    turnId: targetTurn.turnId,
   };
 }
 
@@ -287,6 +319,7 @@ export async function enqueueDeferredInput(
 
   return {
     kind: "queued",
+    delivery: delivery === "guide" ? "guide" : "queue",
     pendingInputId,
     queueLength,
     turnId: targetTurnId,
@@ -312,7 +345,7 @@ export function beginActiveTurn(
   const activeTurn: ActiveTurnSteeringState = {
     goalStateChangeReminderDeferralOpen: false,
     kind,
-    pendingInputs: [],
+    pendingInputs: reservation?.pendingInputs ?? [],
     steerable,
     traceContext,
     turnId,
@@ -337,13 +370,22 @@ export function reserveTurnStart(
   }
   this.activeTurnStartReservation = {
     kind,
+    pendingInputs: [],
     traceContext,
     turnId,
   };
 }
 
-export function releaseTurnStart(this: AgentRuntimeInternal, turnId: TurnId): void {
-  if (this.activeTurnStartReservation?.turnId === turnId) {
+export async function releaseTurnStart(this: AgentRuntimeInternal, turnId: TurnId): Promise<void> {
+  const reservation = this.activeTurnStartReservation;
+  if (reservation?.turnId !== turnId) return;
+  await fallbackGuideInputsToQueue(
+    this,
+    reservation,
+    "guide.startFailed",
+    reservation.traceContext,
+  );
+  if (this.activeTurnStartReservation === reservation) {
     this.activeTurnStartReservation = undefined;
   }
 }
@@ -480,46 +522,66 @@ export async function fallbackPendingGuidesToQueue(
   options: {
     activeTurn: ActiveTurnSteeringState;
     events?: SessionEvent[];
-    reasonCode: "guide.noToolBoundary" | "guide.turnInterrupted";
+    reasonCode: "guide.noToolBoundary" | "guide.turnInterrupted" | "guide.turnFailed";
     traceContext: TraceContext;
   },
 ): Promise<number> {
   if (this.activeTurn !== options.activeTurn) return 0;
+  return await fallbackGuideInputsToQueue(
+    this,
+    options.activeTurn,
+    options.reasonCode,
+    options.traceContext,
+    options.events,
+  );
+}
+
+async function fallbackGuideInputsToQueue(
+  runtime: AgentRuntimeInternal,
+  turn: Pick<ActiveTurnSteeringState, "pendingInputs" | "turnId">,
+  reasonCode:
+    | "guide.noToolBoundary"
+    | "guide.turnInterrupted"
+    | "guide.turnFailed"
+    | "guide.startFailed",
+  traceContext: TraceContext,
+  events?: SessionEvent[],
+): Promise<number> {
   let changed = 0;
-  for (const pendingInput of options.activeTurn.pendingInputs) {
+  for (const pendingInput of turn.pendingInputs) {
     if (pendingInputDelivery(pendingInput) !== "guide") continue;
     const intent = pendingInput.intent
       ? {
           ...pendingInput.intent,
           admittedDelivery: "queue" as const,
-          fallbackReasonCode: options.reasonCode,
+          fallbackReasonCode: reasonCode,
         }
       : undefined;
-    const event = this.createEvent(
+    const event = runtime.createEvent(
       SessionEventType.TurnSteerDeliveryChanged,
       {
         admittedDelivery: "queue",
-        fallbackReasonCode: options.reasonCode,
+        fallbackReasonCode: reasonCode,
         ...(intent ? { intent } : {}),
         pendingInputId: pendingInput.id,
         requestedDelivery: "guide",
-        targetTurnId: options.activeTurn.turnId,
+        targetTurnId: turn.turnId,
       },
-      options.traceContext,
+      traceContext,
     );
-    await this.appendEvent(event, options.traceContext);
-    options.events?.push(event);
+    await runtime.appendEvent(event, traceContext);
+    events?.push(event);
     pendingInput.delivery = "queue";
     if (intent) pendingInput.intent = intent;
     changed += 1;
-    this.logger?.debug("Guide input fell back to ordinary queue", {
-      ...traceContextToLogContext(options.traceContext),
+    runtime.logger?.debug("Guide input fell back to ordinary queue", {
+      ...traceContextToLogContext(traceContext),
       event: "turn.guide.fell_back",
-      fallbackReasonCode: options.reasonCode,
+      fallbackReasonCode: reasonCode,
       module: "core.runtime",
       pendingInputId: pendingInput.id,
       status: "completed",
-      targetTurnId: options.activeTurn.turnId,
+      targetTurnId: turn.turnId,
     });
   }
   return changed;
@@ -529,8 +591,10 @@ async function pendingInputTargetTurnId(
   runtime: AgentRuntimeInternal,
   pendingInputId: string,
 ): Promise<TurnId | undefined> {
-  const active = runtime.activeTurn?.pendingInputs.find((item) => item.id === pendingInputId);
-  if (active) return active.turnId;
+  const owned = (runtime.activeTurn ?? runtime.activeTurnStartReservation)?.pendingInputs.find(
+    (item) => item.id === pendingInputId,
+  );
+  if (owned) return owned.turnId;
   const projection = await runtime.rebuildProjection();
   return projection.pendingSteerInputs.find((item) => item.pendingInputId === pendingInputId)
     ?.targetTurnId;
@@ -687,7 +751,7 @@ export async function removePendingInputById(
 ): Promise<boolean> {
   const reservationId = this.pendingInputReservations.get(options.pendingInputId);
   if (reservationId && reservationId !== options.reservationId) return false;
-  const activeTurn = this.activeTurn;
+  const activeTurn = this.activeTurn ?? this.activeTurnStartReservation;
   const index =
     activeTurn?.pendingInputs.findIndex(
       (pendingInput) => pendingInput.id === options.pendingInputId,
@@ -784,7 +848,7 @@ export async function clearAllPendingInputs(
   traceContext: TraceContext,
 ): Promise<number> {
   let cleared = 0;
-  const activeTurn = this.activeTurn;
+  const activeTurn = this.activeTurn ?? this.activeTurnStartReservation;
   if (activeTurn && activeTurn.pendingInputs.length > 0) {
     for (const item of activeTurn.pendingInputs) {
       await settleRemovedSessionInput(this, item.id, "user_removed");
@@ -848,7 +912,7 @@ export async function editPendingInputById(
     traceContext: TraceContext;
   },
 ): Promise<boolean> {
-  const activeTurn = this.activeTurn;
+  const activeTurn = this.activeTurn ?? this.activeTurnStartReservation;
   const pendingInput = activeTurn?.pendingInputs.find((item) => item.id === options.pendingInputId);
   if (!activeTurn || !pendingInput) {
     // held 回落：held 项只在事件日志/投影，经投影定位后
@@ -923,7 +987,7 @@ export async function reorderPendingInput(
     traceContext: TraceContext;
   },
 ): Promise<boolean> {
-  const activeTurn = this.activeTurn;
+  const activeTurn = this.activeTurn ?? this.activeTurnStartReservation;
   const fromIndexActive =
     activeTurn?.pendingInputs.findIndex((item) => item.id === options.pendingInputId) ?? -1;
   if (!activeTurn || fromIndexActive < 0) {

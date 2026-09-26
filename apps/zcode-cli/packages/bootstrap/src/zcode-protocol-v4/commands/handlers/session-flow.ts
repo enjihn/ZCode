@@ -196,6 +196,11 @@ async function sendText(
   const submissionIntent = (options: Parameters<typeof inputIntentMetadata>[1]) =>
     inputIntentMetadata(envelope, { ...options, ...submittedExecutionState });
   const routingMode = host.getInputRoutingMode?.(envelope.sessionId ?? "") ?? null;
+  const followupMode = host.getSessionFollowupMode?.(envelope.sessionId ?? "") ?? null;
+  const requestedDelivery =
+    payload.requestedDelivery ??
+    followupMode ??
+    (routingMode === "guide" ? "guide" : routingMode === "enqueue" ? "queue" : "startNow");
   const forceStartNow = payload.requestedDelivery === "startNow";
   const foregroundPromotionLeaseId = forceStartNow ? `send-now:${envelope.commandId}` : undefined;
   let foregroundPromotionLeaseAcquired = false;
@@ -253,10 +258,8 @@ async function sendText(
   try {
     const intent = submissionIntent({
       text: payload.text,
-      requestedDelivery:
-        payload.requestedDelivery ??
-        (routingMode === "guide" ? "guide" : routingMode === "enqueue" ? "queue" : "startNow"),
-      ...(routingMode === "guide" && attachments?.length
+      requestedDelivery,
+      ...(requestedDelivery === "guide" && attachments?.length
         ? { fallbackReasonCode: "guide.attachmentsUnsupported" }
         : {}),
       attachmentRefs: payload.attachments,
@@ -290,7 +293,7 @@ async function sendText(
   if (started.admission.kind === "queued") {
     return {
       type: "inputAccepted",
-      delivery: "queue",
+      delivery: started.admission.delivery ?? "queue",
       inputId: envelope.commandId,
     };
   }

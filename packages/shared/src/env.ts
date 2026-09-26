@@ -37,6 +37,14 @@ export const ZCODE_PRODUCT_FLAVOR = normalizeZCodeProductFlavor(
   typeof __ZCODE_PRODUCT_FLAVOR__ !== "undefined" ? __ZCODE_PRODUCT_FLAVOR__ : undefined,
   ZCODE_ENV,
 );
+
+/** This locally installed fork never consumes official desktop updates. */
+const OFFICIAL_DESKTOP_UPDATES_ENABLED = false;
+
+export function shouldUseOfficialDesktopUpdates(flavor: ZCodeProductFlavor): boolean {
+  return OFFICIAL_DESKTOP_UPDATES_ENABLED && flavor === "production";
+}
+
 export const ZCODE_APP_VERSION_ENV = "ZCODE_APP_VERSION" as const;
 export const ZCODE_BUILD_COMMIT_ID_ENV = "ZCODE_BUILD_COMMIT_ID" as const;
 

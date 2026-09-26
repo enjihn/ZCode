@@ -6,6 +6,7 @@ import {
   isValidShortcutBinding,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  shouldUseOfficialDesktopUpdates,
   type DesktopCommandId,
   type Locale,
 } from "@zcode/shared";
@@ -117,8 +118,8 @@ function buildApplicationMenuTemplate(options: {
                 label: getLabel(desktopMenuMessageIds.helpAbout),
                 click: () => void options.executeDesktopCommand(DesktopCommandIds.ShowAbout),
               },
-              // 更新入口跟随产品身份：Preview 禁用更新器，生产后端的 Preview 也不例外。
-              ...(ZCODE_PRODUCT_FLAVOR === "production"
+              // 本地 fork 维持生产身份，但不提供官方更新入口。
+              ...(shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)
                 ? [
                     {
                       id: CHECK_FOR_UPDATE_MENU_ID,
@@ -259,7 +260,7 @@ function buildApplicationMenuTemplate(options: {
                 label: getLabel(desktopMenuMessageIds.helpAbout),
                 click: () => void options.executeDesktopCommand(DesktopCommandIds.ShowAbout),
               },
-              ...(ZCODE_PRODUCT_FLAVOR === "production"
+              ...(shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)
                 ? [
                     {
                       id: CHECK_FOR_UPDATE_MENU_ID,

@@ -122,7 +122,7 @@ export interface AgentRuntimeCoreMethods {
     options?: { inputId?: string },
   ): ActiveTurnSteeringState;
   reserveTurnStart(turnId: TurnId, traceContext: TraceContext, kind: ActiveTurnKind): void;
-  releaseTurnStart(turnId: TurnId): void;
+  releaseTurnStart(turnId: TurnId): Promise<void>;
   finishActiveTurn(activeTurn: ActiveTurnSteeringState | undefined): void;
   createPendingInputId(turnId: TurnId): string;
   rejectTurnSteer(
@@ -140,7 +140,7 @@ export interface AgentRuntimeCoreMethods {
   fallbackPendingGuidesToQueue(options: {
     activeTurn: ActiveTurnSteeringState;
     events?: SessionEvent[];
-    reasonCode: "guide.noToolBoundary" | "guide.turnInterrupted";
+    reasonCode: "guide.noToolBoundary" | "guide.turnInterrupted" | "guide.turnFailed";
     traceContext: TraceContext;
   }): Promise<number>;
   drainPendingInput(options: {

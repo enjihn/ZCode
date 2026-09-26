@@ -9,6 +9,8 @@ import {
   PlatformChannels,
   resolveRuntimeZCodeEndpointOrigin,
   ZCODE_VERSION,
+  ZCODE_PRODUCT_FLAVOR,
+  shouldUseOfficialDesktopUpdates,
   type ElectronReleaseChannel,
   type Locale,
   type PostUpdateReleaseNotesPayload,
@@ -58,8 +60,8 @@ let pendingCancelledDownloadErrorCount = 0;
 let autoUpdaterSettingService: SettingServiceLike | undefined;
 // initAutoUpdater({ enabled: false }) 只清轮询并 return，electron-updater 实例保持未配置
 // （占位 feed、autoDownload 默认值）。任何漏改成按身份判断的入口若仍调用手动检查，
-// 都会对占位 feed 发真实请求。这里记住“本 flavor 已禁用”，让手动检查在模块内部 fail-closed。
-let autoUpdaterDisabledForProductFlavor = false;
+// 都会对占位 feed 发真实请求。这里记住“当前 build 已禁用”，让手动检查在模块内部 fail-closed。
+let autoUpdaterDisabledForBuild = false;
 
 type SettingServiceLike = Pick<ISettingService, "get" | "update">;
 
@@ -1288,6 +1290,15 @@ export function setAutoUpdaterMenuLocale(locale: Locale) {
 }
 
 export async function hydratePendingPostUpdateReleaseNotes(settingService: SettingServiceLike) {
+  if (!shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    // 旧正式版可能留下待安装官方包；fork 仍保留数据，但不能把它恢复成可安装状态。
+    pendingPostUpdateReleaseNotes = null;
+    deliveredPostUpdateReleaseNotesWebContentsId = null;
+    clearReadyUpdateState();
+    setAutoUpdaterMenuState({ kind: "idle", enabled: false });
+    return;
+  }
+
   const settings = await settingService.get();
   pendingPostUpdateReleaseNotes = settings.pendingPostUpdateReleaseNotes ?? null;
   deliveredPostUpdateReleaseNotesWebContentsId = null;
@@ -1353,6 +1364,11 @@ export function refreshAutoUpdaterReleaseChannel(
   receivePreviewUpdates: boolean,
   reason = "settings receivePreviewUpdates changed",
 ) {
+  if (!shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    logger.info(`[auto-update] skip ${reason}: official updater disabled for this build`);
+    return;
+  }
+
   const nextChannel: ElectronReleaseChannel = receivePreviewUpdates ? "preview" : "stable";
 
   if (!canUseAutoUpdaterInCurrentRuntime()) {
@@ -1460,16 +1476,18 @@ export async function acknowledgePostUpdateReleaseNotes(
 }
 
 export async function initAutoUpdater(options: InitAutoUpdaterOptions = {}): Promise<void> {
-  if (options.enabled === false) {
-    autoUpdaterDisabledForProductFlavor = true;
+  if (options.enabled === false || !shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    autoUpdaterDisabledForBuild = true;
     if (autoUpdatePollTimer) {
       clearInterval(autoUpdatePollTimer);
       autoUpdatePollTimer = null;
     }
-    logger.info("[auto-update] disabled for this desktop product flavor");
+    clearReadyUpdateState();
+    setAutoUpdaterMenuState({ kind: "idle", enabled: false });
+    logger.info("[auto-update] official updater disabled for this desktop build");
     return;
   }
-  autoUpdaterDisabledForProductFlavor = false;
+  autoUpdaterDisabledForBuild = false;
   if (!canUseAutoUpdaterInCurrentRuntime()) return;
 
   onBeforeQuitAndInstall = options.onBeforeQuitAndInstall;
@@ -1766,6 +1784,11 @@ export function requestForceAutoUpdate(
   reason = "force-update",
   _minimumVersion?: string,
 ) {
+  if (!shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    onStateChange({ kind: "dev-skipped", message: "official updates disabled for this build" });
+    return () => {};
+  }
+
   const dispose = () => {
     if (activeForceAutoUpdateListener === onStateChange) {
       activeForceAutoUpdateListener = null;
@@ -1857,9 +1880,9 @@ export function checkForUpdateMenuClick(originWindow?: BrowserWindow | null) {
     return;
   }
 
-  if (autoUpdaterDisabledForProductFlavor) {
-    // 入口本应已按产品身份隐藏；这里是最后一道闸，不让未初始化的 updater 实例向占位 feed 发请求。
-    logger.info("[auto-update] skip manual check: updater disabled for this product flavor");
+  if (autoUpdaterDisabledForBuild || !shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    // 本地 fork 的入口本应隐藏；这里是最后一道闸，不让未初始化的 updater 向占位 feed 发请求。
+    logger.info("[auto-update] skip manual check: updater disabled for this build");
     targetWindow.webContents.send(PlatformChannels.UpdateCheckResult, {
       kind: "dev-skipped",
     } satisfies UpdateCheckResultPayload);

@@ -782,6 +782,8 @@ export interface ActiveTurnSteeringState {
 
 export interface ActiveTurnStartReservation {
   kind: ActiveTurnKind;
+  /** Guide inputs admitted while the start command is preparing the active turn. */
+  pendingInputs: PendingTurnInput[];
   traceContext: TraceContext;
   turnId: TurnId;
 }

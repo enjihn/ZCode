@@ -13,6 +13,7 @@ import {
   resolveRuntimeZCodeEndpointOrigin,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  shouldUseOfficialDesktopUpdates,
   buildZCodeEndpointUrls,
   getCommunityUrlFromConfigs,
   getFeedbackUrlFromConfig,
@@ -589,11 +590,11 @@ export async function executeDesktopCommand(options: {
       );
       return;
     case DesktopCommandIds.CheckForUpdates:
-      // 按产品身份而不是后端环境放行：生产后端的 Preview 同样没有更新器。
-      if (ZCODE_PRODUCT_FLAVOR === "production") {
+      // 本地 fork 维持生产身份，但任何命令来源都不能检查官方更新。
+      if (shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
         checkForUpdateMenuClick(targetWindow);
       } else {
-        options.logger.info("[auto-update] Preview 已禁用手动更新检查");
+        options.logger.info("[auto-update] 本地 fork 已禁用官方手动更新检查");
       }
       return;
     case DesktopCommandIds.RelaunchApp:

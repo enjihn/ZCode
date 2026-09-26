@@ -197,7 +197,7 @@ async function runRuntimeCommand(
   try {
     if (command.mode === "prompt") {
       if (this.runtimeCommandQueue.consumeCancelPending(command.id)) {
-        if (command.startReservation) this.releaseTurnStart(command.startReservation.turnId);
+        if (command.startReservation) await this.releaseTurnStart(command.startReservation.turnId);
         command.reject(createTurnCancelledError(command.options?.abortSignal?.reason));
         return;
       }

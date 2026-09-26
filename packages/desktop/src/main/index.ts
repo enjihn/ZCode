@@ -69,6 +69,7 @@ import {
   PlatformChannels,
   ZCODE_ENV,
   ZCODE_PRODUCT_FLAVOR,
+  shouldUseOfficialDesktopUpdates,
   DEFAULT_ZCODE_ENDPOINT_ORIGIN,
   DEFAULT_LOCALE,
   ZCODE_VERSION,
@@ -2009,11 +2010,10 @@ app.whenReady().then(async () => {
   await hydratePendingPostUpdateReleaseNotes(mainSettingService);
   logWindowsBundledRuntimeIntegrityDiagnostic();
 
-  // 启动自动更新检查（后台执行，不阻塞主界面）
-  // Preview 身份无论连接哪个后端都不自动更新：stable feed 上只分发正式 ZCode 安装包，
-  // 不向 Preview 渠道提供更新。
+  // 本地 fork 保留 production 身份和既有数据目录，但官方更新会覆盖 fork 构建。
+  // 策略在 main 和 updater 内部都拒绝官方检查，避免启动时访问官方 feed。
   void initAutoUpdater({
-    enabled: ZCODE_PRODUCT_FLAVOR === "production",
+    enabled: shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR),
     onBeforeQuitAndInstall: async () => {
       notifyStabilityLifecycle("update_install");
       await prepareAppQuit("auto-update quitAndInstall", "update-install");
@@ -2248,15 +2248,11 @@ app.whenReady().then(async () => {
   });
   registerDesktopNetworkTelemetry(logger);
 
-  // 本地未打包 dev 构建（app.isPackaged === false）必须跳过远端强制升级 gate。
-  // 原因：force-update gate 只看 ZCODE_ENV === "production"，但 dev 构建（如 dev:desktop:cua
-  // 连真实后端测 computer use）虽指向 production 后端，版本号却滞后于线上 release（feature
-  // 分支不 bump 版本），会被 release minimalVersion 误判为"需强制升级"而启动秒退。force-update
-  // 是面向打包发布客户端的安全门，对未打包 dev 运行时无意义。打包版 app.isPackaged === true，
-  // gate 照常生效，对真实用户零影响。
+  // 本地 fork 跳过官方强制升级：上游 minimumVersion 不得阻止已验证的 fork 启动。
+  // 未打包 dev 构建也跳过；它的版本号可能落后于线上 release，不能据此关闭主窗口。
   const skipForceUpdateForLocalDevRuntime = !app.isPackaged;
   const forceUpdateGuardResult =
-    ZCODE_PRODUCT_FLAVOR === "production" && !skipForceUpdateForLocalDevRuntime
+    shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR) && !skipForceUpdateForLocalDevRuntime
       ? await maybeBlockStartupForForceUpdate({
           locale: currentApplicationLocale,
           logger,
@@ -2266,8 +2262,8 @@ app.whenReady().then(async () => {
           },
         })
       : { blocked: false };
-  if (ZCODE_PRODUCT_FLAVOR !== "production") {
-    logger.info("[force-update] Preview 跳过远端强制升级检查");
+  if (!shouldUseOfficialDesktopUpdates(ZCODE_PRODUCT_FLAVOR)) {
+    logger.info("[force-update] 本地 fork 跳过官方远端强制升级检查");
   } else if (skipForceUpdateForLocalDevRuntime) {
     logger.info("[force-update] 本地 dev 构建（未打包）跳过远端强制升级检查");
   }

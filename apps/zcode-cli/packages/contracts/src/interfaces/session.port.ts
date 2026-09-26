@@ -346,6 +346,8 @@ export interface PendingTurnInput {
 export type TurnSteerResult =
   | {
       kind: "queued";
+      /** Core's admitted delivery, which may differ from the requested Guide delivery. */
+      delivery?: "guide" | "queue";
       pendingInputId: string;
       queueLength: number;
       turnId: TurnId;

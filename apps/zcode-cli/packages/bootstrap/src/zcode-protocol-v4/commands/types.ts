@@ -113,6 +113,8 @@ export interface V4CommandCoreHost {
   getInputRoutingMode?(
     sessionId: string,
   ): "startNow" | "enqueue" | "guide" | "reject" | "choice" | null;
+  /** Persisted session Guide/Queue preference; unlike inputRouting, it does not encode a UI phase. */
+  getSessionFollowupMode?(sessionId: string): "queue" | "guide" | null;
   /** runtime event notification 后，等待目标 event 真正完成 reorder drain + projection apply。 */
   waitForProjectionEventCommit?(
     sessionId: string,

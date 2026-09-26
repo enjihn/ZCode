@@ -19,7 +19,7 @@ export function enqueueCancellableRuntimeCommand<
       reject: (error: unknown) => void;
       resolve: (result: Result) => void;
     }) => Command;
-    onCommandCancelled?: () => void;
+    onCommandCancelled?: () => void | Promise<void>;
   },
 ): Promise<Result> {
   return new Promise<Result>((resolve, reject) => {
@@ -44,20 +44,29 @@ export function enqueueCancellableRuntimeCommand<
       reject: rejectCommand,
       resolve: resolveCommand,
     });
+    function cancelRemovedCommand(reason: unknown) {
+      try {
+        const released = input.onCommandCancelled?.();
+        void Promise.resolve(released).then(
+          () => rejectCommand(createTurnCancelledError(reason)),
+          rejectCommand,
+        );
+      } catch (error) {
+        rejectCommand(error);
+      }
+    }
     function abortQueuedCommand() {
       if (settled) return;
       const removed = runtime.runtimeCommandQueue.removeById(command.id);
       if (removed) {
-        input.onCommandCancelled?.();
-        rejectCommand(createTurnCancelledError(abortSignal?.reason));
+        cancelRemovedCommand(abortSignal?.reason);
         return;
       }
       // 取消可能撞上 command 刚出队但尚未进入实际执行的窄窗口，先记账让执行侧跳过。
       runtime.runtimeCommandQueue.markCancelPending(command.id);
     }
     if (abortSignal?.aborted) {
-      input.onCommandCancelled?.();
-      rejectCommand(createTurnCancelledError(abortSignal.reason));
+      cancelRemovedCommand(abortSignal.reason);
       return;
     }
     abortSignal?.addEventListener("abort", abortQueuedCommand, { once: true });

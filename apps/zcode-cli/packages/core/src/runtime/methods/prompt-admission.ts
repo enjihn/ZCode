@@ -42,9 +42,11 @@ export async function admitPrompt(
     }
 
     const activeTurn = this.activeTurn;
+    const reservation = this.activeTurnStartReservation;
     const canSteer =
       attachments === undefined &&
-      activeTurn?.steerable === true &&
+      (activeTurn?.steerable === true ||
+        (activeTurn === undefined && reservation?.kind === "regular")) &&
       (options?.queueDelivery === "guide" ||
         options?.delivery === "auto" ||
         options?.delivery === "steer_active_turn") &&
@@ -66,8 +68,15 @@ export async function admitPrompt(
       });
     }
 
-    const delivery =
-      options?.queueDelivery === "guide" && attachments === undefined ? "guide" : "queue";
+    const delivery = "queue";
+    const fallbackReasonCode =
+      options?.queueDelivery === "guide"
+        ? attachments !== undefined
+          ? "guide.attachmentsUnsupported"
+          : activeTurn?.steerable === false
+            ? "guide.turnNotSteerable"
+            : "guide.maintenance"
+        : undefined;
     return await this.enqueueDeferredInput({
       attachments,
       commandKind: options?.commandKind,
@@ -76,7 +85,7 @@ export async function admitPrompt(
       inputPresentation:
         options?.inputPresentation ?? (!options?.inputSource ? "user_steer" : undefined),
       inputId: options?.inputId,
-      intent: admissionIntent(options?.intent, delivery),
+      intent: admissionIntent(options?.intent, delivery, fallbackReasonCode),
       queryId: options?.queryId,
       toolDisallowlist: options?.toolDisallowlist,
       traceContext: options?.traceContext,
@@ -93,6 +102,7 @@ export async function admitPrompt(
   });
   const reservation: ActiveTurnStartReservation = {
     kind: "regular",
+    pendingInputs: [],
     traceContext: turnTraceContext,
     turnId,
   };
@@ -128,6 +138,13 @@ export async function admitPrompt(
 function admissionIntent(
   intent: TurnInputIntentMetadata | undefined,
   admittedDelivery: "guide" | "queue",
+  fallbackReasonCode?: string,
 ): TurnInputIntentMetadata | undefined {
-  return intent ? { ...intent, admittedDelivery } : undefined;
+  return intent
+    ? {
+        ...intent,
+        admittedDelivery,
+        ...(fallbackReasonCode ? { fallbackReasonCode } : {}),
+      }
+    : undefined;
 }

@@ -728,16 +728,19 @@ export async function executeTurnCommand(
         if (finishedTarget?.targetID === startedTarget?.targetID) {
           startedTarget = finishedTarget;
         }
+        if (activeTurn) {
+          await this.fallbackPendingGuidesToQueue({
+            activeTurn,
+            events,
+            reasonCode:
+              coreError.type === CoreErrorType.TurnCancelled
+                ? "guide.turnInterrupted"
+                : "guide.turnFailed",
+            traceContext: turnTraceContext,
+          });
+        }
         if (coreError.type === CoreErrorType.TurnCancelled) {
           await this.pauseActiveTargetForCancellation(turnTraceContext);
-          if (activeTurn) {
-            await this.fallbackPendingGuidesToQueue({
-              activeTurn,
-              events,
-              reasonCode: "guide.turnInterrupted",
-              traceContext: turnTraceContext,
-            });
-          }
         }
         // 普通 TurnError 只结束当前 turn，不撤销已经 accepted 的 future input。
         // V4 TurnError 投影将队列切成 error-paused，runtime 同步关闭行内 drain，
@@ -824,7 +827,7 @@ export async function executeTurnCommand(
     if (targetRunHeartbeat) {
       clearInterval(targetRunHeartbeat);
     }
-    this.releaseTurnStart(turnId);
+    await this.releaseTurnStart(turnId);
     clearBrowserTurnState(this.sessionId, turnId);
     this.finishActiveTurn(activeTurn);
     turnAbortScope.dispose();

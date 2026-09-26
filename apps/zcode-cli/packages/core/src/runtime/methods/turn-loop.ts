@@ -22,6 +22,7 @@ import {
 } from "../../agent/message-history.js";
 import type { AgentRuntimeInternal } from "../internal.js";
 import { runModelBackedTurnStep } from "./turn-model-step.js";
+import { drainInlineGuideForNextRequest } from "./turn-guide-drain.js";
 import {
   AUTOMATION_MUTATION_TOOL_NAMES,
   evaluateRapidRefill,
@@ -49,7 +50,7 @@ export async function runRegularTurnLoop(
     const outputTokenRecoveryActive = state.turnRequestState.outputTokenContinuationCount > 0;
     // guide 只允许由完整 tool result batch 设置这个一次性诊断；普通 queue 不在
     // model roundtrip 起点消费，避免把未来 turn 错并入当前 product turn。
-    const drainedSteerForNextRequest = state.drainedSteerForNextRequest;
+    let drainedSteerForNextRequest = state.drainedSteerForNextRequest;
     state.drainedSteerForNextRequest = undefined;
 
     if (state.modelStepCount > 0 && !outputTokenRecoveryActive) {
@@ -106,6 +107,12 @@ export async function runRegularTurnLoop(
     await this.initializeMcp(state.turnTraceContext);
     finishMcp();
     throwIfTurnAborted(state.turnAbortSignal);
+    // A Guide admitted against the start reservation belongs in the first provider request.
+    // This is the last preparation boundary before tool selection and request projection.
+    if (state.modelStepCount === 0 && (await drainInlineGuideForNextRequest(this, state))) {
+      drainedSteerForNextRequest = state.drainedSteerForNextRequest;
+      state.drainedSteerForNextRequest = undefined;
+    }
     const finishTools = beginLocalTurnPreparation(state.turnTraceContext, "tools");
     const turnDisallowedTools = buildTurnDisallowedTools(state);
     // automation 派发到已 active 会话或重试恢复时，入口 metadata 可能没有带到

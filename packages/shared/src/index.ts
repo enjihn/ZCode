@@ -71,6 +71,7 @@ export {
   mapZCodeEnvToArmsRumEnv,
   normalizeZCodeEnv,
   normalizeZCodeProductFlavor,
+  shouldUseOfficialDesktopUpdates,
 } from "./env.js";
 export * from "./errors.js";
 export type { SessionCreateSource } from "./sessionCreateSource.js";
