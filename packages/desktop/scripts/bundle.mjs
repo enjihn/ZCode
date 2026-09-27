@@ -23,6 +23,7 @@ import {
   runCommandAndReadStdout,
 } from "../../../scripts/spawn-command.mjs";
 import { resolveIntranetDepsBaseUrl } from "../../../scripts/intranetDefaults.mjs";
+import { assertWindowsPackagedResources } from "./windows-packaged-resources.mjs";
 
 const desktopRoot = resolve(import.meta.dirname, "..");
 const workspaceRoot = resolve(desktopRoot, "../..");
@@ -742,6 +743,12 @@ async function main() {
   runTimedSync("bundle:verify-runtime-dependencies", () =>
     verifyPackagedRuntimeDependencies(os, arch),
   );
+
+  if (os === "win") {
+    await runTimedAsync("bundle:verify-windows-resources", () =>
+      assertWindowsPackagedResources(dirname(resolveAppAsarPath(os, arch)), arch),
+    );
+  }
 
   const artifactPath = findBuiltArtifact(os, arch);
   runTimedSync("bundle:audit-bundle-size", () =>

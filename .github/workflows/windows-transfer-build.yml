@@ -1,0 +1,102 @@
+name: Windows x64 transfer installer
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      ZCODE_ENV: production
+      ZCODE_SKIP_REMOTE_ASSETS: "1"
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.14.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: node scripts/check-workspace-freshness.mjs
+      - run: node --test packages/desktop/scripts/windows-packaged-resources.test.mjs packages/desktop/scripts/stage-agent-bundle.test.mjs
+      - run: pnpm bundle:desktop -- --os win --arch x64
+      - run: node --experimental-test-module-mocks --import tsx --test packages/desktop/test/localForkUpdatePolicy.test.ts packages/desktop/test/windowsTransferImport.integration.test.ts apps/zcode-cli/packages/core/test/guideAdmission.test.ts
+      - name: Check packaged identity and About commit
+        shell: pwsh
+        run: |
+          Push-Location packages/desktop
+          try {
+            $asar = Join-Path $PWD "dist/win-unpacked/resources/app.asar"
+            $metadata = node -e 'const asar=require("@electron/asar"); const path=require("node:path"); process.stdout.write(asar.extractFile(process.argv[1], path.join("out", "metadata", "build-meta.json")).toString("utf8"))' $asar | ConvertFrom-Json
+            $package = node -e 'const asar=require("@electron/asar"); process.stdout.write(asar.extractFile(process.argv[1], "package.json").toString("utf8"))' $asar | ConvertFrom-Json
+            if ($metadata.buildCommitId -ne $env:GITHUB_SHA.Substring(0, 8)) { throw "Packaged About commit differs from checkout" }
+            if ($package.zcodeProductFlavor -ne "production") { throw "Packaged app has wrong product flavor" }
+          } finally {
+            Pop-Location
+          }
+      - name: Launch packaged runtime
+        shell: pwsh
+        run: |
+          $exe = Join-Path $PWD "packages/desktop/dist/win-unpacked/ZCode.exe"
+          if (-not (Test-Path $exe)) { throw "Packaged ZCode.exe is missing" }
+          $smokeRoot = Join-Path $env:RUNNER_TEMP "zcode-packaged-smoke"
+          $smokeHome = Join-Path $smokeRoot "home"
+          $smokeUserData = Join-Path $smokeRoot "electron"
+          $env:ZCODE_DATA_BASE_DIR = $smokeHome
+          $env:ZCODE_DESKTOP_HOME_DIR = $smokeHome
+          $env:ZCODE_DESKTOP_USER_DATA_DIR = $smokeUserData
+          $env:ZCODE_DESKTOP_SESSION_DATA_DIR = Join-Path $smokeUserData "session"
+          New-Item -ItemType Directory -Path $smokeHome, $smokeUserData, $env:ZCODE_DESKTOP_SESSION_DATA_DIR -Force | Out-Null
+          Set-Content -Path (Join-Path $smokeUserData "mac-setup-import-offered") -Value "1"
+          $process = Start-Process -FilePath $exe -ArgumentList "--disable-gpu" -PassThru
+          try {
+            $logDir = Join-Path $smokeHome ".zcode/v2/logs"
+            $normalWindow = $false
+            $hostForked = $false
+            $hostReady = $false
+            for ($attempt = 0; $attempt -lt 45; $attempt++) {
+              if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+                throw "Packaged ZCode exited during startup"
+              }
+              if (Test-Path $logDir) {
+                $lines = Get-ChildItem $logDir -Filter "*.log" -File |
+                  Get-Content -ErrorAction SilentlyContinue
+                $normalWindow = [bool]($lines | Select-String -SimpleMatch "[primary-window] creating main window (app-ready)")
+                $hostForked = [bool]($lines | Select-String -SimpleMatch "[spawnHostProcess] forked host process")
+                $hostReady = [bool]($lines | Select-String -SimpleMatch "local services ready, all channels registered")
+                if ($normalWindow -and $hostForked -and $hostReady) { break }
+              }
+              Start-Sleep -Seconds 2
+            }
+            if (-not $normalWindow) { throw "Packaged ZCode did not create its normal main window" }
+            if (-not $hostForked) { throw "Packaged ZCode did not fork a window Host" }
+            if (-not $hostReady) { throw "Packaged ZCode window Host did not finish local service startup" }
+            if (-not (Get-Process -Id $process.Id -ErrorAction SilentlyContinue)) {
+              throw "Packaged ZCode exited during startup"
+            }
+          } finally {
+            Get-CimInstance Win32_Process -Filter "ParentProcessId=$($process.Id)" |
+              ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+            Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+          }
+      - name: Record installer checksum
+        shell: pwsh
+        run: |
+          $installer = Get-ChildItem packages/desktop/dist/ZCode-*-win-x64.exe | Select-Object -First 1
+          if (-not $installer) { throw "Windows x64 NSIS installer is missing" }
+          Get-FileHash $installer.FullName -Algorithm SHA256 | Format-List
+      - uses: actions/upload-artifact@v4
+        with:
+          name: zcode-windows-x64-unsigned-${{ github.sha }}
+          path: packages/desktop/dist/ZCode-*-win-x64.exe
+          if-no-files-found: error
+          retention-days: 7
