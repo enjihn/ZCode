@@ -1,4 +1,5 @@
 import { createLocalTtftExporter } from "./localTtftExporter.js";
+import { runMacSetupImportOnStartup } from "./profileTransferOnboarding.js";
 /* eslint-disable max-lines */
 import "./desktopEarlyDataBaseDirBootstrap.js";
 import "./desktopEarlyChromiumHardwareAccelerationBootstrap.js";
@@ -1925,6 +1926,14 @@ app.on("second-instance", (_event, argv, _workingDirectory, additionalData) => {
 });
 
 app.whenReady().then(async () => {
+  if (
+    await runMacSetupImportOnStartup({
+      profileDir: getZCodeDataRootDir(),
+      homeDir: app.getPath("home"),
+    })
+  ) {
+    return;
+  }
   markMainLaunchAppReady();
   installLocalMediaPreviewProtocol(session.defaultSession.protocol, {
     isPathAuthorized: localMediaPreviewPathRegistry.isAuthorized,
