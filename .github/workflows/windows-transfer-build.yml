@@ -36,7 +36,7 @@ jobs:
           Push-Location packages/desktop
           try {
             $asar = Join-Path $PWD "dist/win-unpacked/resources/app.asar"
-            $metadata = node -e 'const asar=require("@electron/asar"); process.stdout.write(asar.extractFile(process.argv[1], "out/metadata/build-meta.json").toString("utf8"))' $asar | ConvertFrom-Json
+            $metadata = node -e 'const asar=require("@electron/asar"); const path=require("node:path"); process.stdout.write(asar.extractFile(process.argv[1], path.join("out", "metadata", "build-meta.json")).toString("utf8"))' $asar | ConvertFrom-Json
             $package = node -e 'const asar=require("@electron/asar"); process.stdout.write(asar.extractFile(process.argv[1], "package.json").toString("utf8"))' $asar | ConvertFrom-Json
             if ($metadata.buildCommitId -ne $env:GITHUB_SHA.Substring(0, 8)) { throw "Packaged About commit differs from checkout" }
             if ($package.zcodeProductFlavor -ne "production") { throw "Packaged app has wrong product flavor" }
