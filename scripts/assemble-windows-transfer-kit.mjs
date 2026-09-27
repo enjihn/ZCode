@@ -90,6 +90,7 @@ This kit contains the unsigned ZCode installer from fork commit \`${buildCommit}
 3. Run \`${installerName}\`. It is unsigned, so Windows may show a publisher warning. Continue only after the hashes match.
 4. Launch ZCode. At the first-launch **Import Mac Setup** prompt, select \`${archiveName}\` and enter the transfer passphrase. If the prompt was skipped, close ZCode, locate \`ZCode.exe\` in the installation directory you chose, and run \`& "C:\\path\\to\\ZCode.exe" --import-mac-setup\` in PowerShell.
 5. Let ZCode finish profile import and restart. HyperResearch setup may take longer while Python 3.12 dependencies and Chromium are installed. Sign back in to Z.ai; Mac account credentials cannot be transferred.
+6. Open the imported HyperResearch workspace and choose **Git Bash** as its ZCode session shell before running research steps.
 
 If HyperResearch dependency setup reports missing Git or uv after installation, close ZCode and launch it from a newly opened PowerShell so it inherits the updated PATH (or sign out and back in). ZCode will offer to retry the pending setup, including the browser, Stop hook, and agents.
 
@@ -98,7 +99,7 @@ The encrypted archive can be imported again if the app reports a profile import 
 ## Check on this PC
 
 - In About, confirm the commit matches \`${buildCommit.slice(0, 8)}\`. Local is the default provider and shows GLM-5.3-Flash with a 1,048,576-token context, a blank personal output-token override, and Low/High/Max reasoning controls.
-- Open several imported chats and their attachments. Open the HyperResearch workspace and skill. Exercise Browser Use, which uses the bundled node-repl runtime.
+- Open several imported chats and their attachments. Run the HyperResearch skill in a Git Bash session. Exercise Browser Use, which uses the bundled node-repl runtime.
 - In disposable chats, test Local text, all three reasoning levels, a tool call, structured JSON, a photo, a short video, a two-page PDF, Guide steering, and remote Web replay.
 
 This kit has not passed those Windows 11 on-device checks until you run them. Official automatic updates are disabled for this fork; future updates use another validated fork build and transfer/backup flow.
