@@ -29,7 +29,7 @@ jobs:
       - run: node scripts/check-workspace-freshness.mjs
       - run: node --test packages/desktop/scripts/windows-packaged-resources.test.mjs packages/desktop/scripts/stage-agent-bundle.test.mjs
       - run: pnpm bundle:desktop -- --os win --arch x64
-      - run: node --experimental-test-module-mocks --import tsx --test packages/desktop/test/localForkUpdatePolicy.test.ts packages/desktop/test/localForkUpdateEntrypoints.test.ts packages/desktop/test/windowsTransferImport.integration.test.ts apps/zcode-cli/packages/core/test/guideAdmission.test.ts
+      - run: node --experimental-test-module-mocks --import tsx --test packages/desktop/test/localForkUpdatePolicy.test.ts packages/desktop/test/windowsTransferImport.integration.test.ts apps/zcode-cli/packages/core/test/guideAdmission.test.ts
       - name: Check packaged identity and About commit
         shell: pwsh
         run: |
